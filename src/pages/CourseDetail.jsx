@@ -56,10 +56,6 @@ export default function CourseDetail() {
   }, [id, params]);
 
   const handleBuy = async () => {
-    if (!user) {
-      navigate(`/login?redirect=/courses/${id}`);
-      return;
-    }
     // Open the Skool-style Checkout Modal
     setShowCheckout(true);
   };
@@ -70,11 +66,21 @@ export default function CourseDetail() {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <div style={{ paddingTop: '96px', paddingBottom: '48px', display: 'flex', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', width: '100%', maxWidth: '1085px', gap: '40px', padding: '0 16px', alignItems: 'flex-start' }}>
+      <style>{`
+        .course-layout { display: flex; flex-direction: column; width: 100%; max-width: 1085px; gap: 40px; padding: 0 16px; margin: 0 auto; align-items: flex-start; }
+        .course-left { width: 100%; }
+        .course-right { width: 100%; flex-shrink: 0; }
+        @media (min-width: 1024px) {
+          .course-layout { flex-direction: row; }
+          .course-left { flex: 2 1 100%; min-width: 471px; max-width: 770px; }
+          .course-right { width: 273px; position: sticky; top: 96px; }
+        }
+      `}</style>
+      <div className="pt-24 pb-12">
+        <div className="course-layout">
           
-          {/* Left Column: Rich Content Feed (max 770px) */}
-          <div style={{ flex: '2 1 100%', minWidth: '471px', maxWidth: '770px' }}>
+          {/* Left Column: Rich Content Feed */}
+          <div className="course-left">
             <div className="bg-white rounded-2xl border p-6 shadow-sm" style={{ borderColor: '#E4E4E6' }}>
               
               {/* Skool Title */}
@@ -174,8 +180,8 @@ export default function CourseDetail() {
             </div>
           </div>
 
-            {/* Right Column: Sticky Join Card (exact 273px) */}
-            <aside style={{ flexShrink: 0, width: '273px', position: 'sticky', top: '96px' }}>
+            {/* Right Column: Sticky Join Card */}
+            <aside className="course-right">
               <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: '#E4E4E4' }}>
                 {/* Course Image */}
                 <div style={{ width: '100%', height: '144px', position: 'relative', backgroundColor: '#161111' }}>

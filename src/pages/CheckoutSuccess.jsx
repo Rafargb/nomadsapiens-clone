@@ -138,9 +138,22 @@ export default function CheckoutSuccess() {
               <p className="mt-3 text-nomad-muted">
                 Você agora faz parte do curso <strong>{tx?.course_title}</strong>. Boa jornada, nômade.
               </p>
-              <Link to="/dashboard" className="btn-primary mt-8 inline-flex" data-testid="go-dashboard">
-                Ir para o dashboard <ArrowRight size={18} />
-              </Link>
+              {!user ? (
+                <div className="mt-8 border-t border-[#E6D7C3] pt-8">
+                  <h2 className="font-heading font-black text-2xl mb-2">Quase lá!</h2>
+                  <p className="text-nomad-muted mb-4">Seu pagamento está vinculado ao e-mail <b>{params.get("guest_email")}</b>. Defina uma senha para acessar as aulas agora mesmo.</p>
+                  <Link to={`/register?email=${encodeURIComponent(params.get("guest_email") || '')}&name=${encodeURIComponent(params.get("guest_name") || '')}`} className="btn-primary w-full max-w-[200px] mb-4">
+                    Criar minha senha
+                  </Link>
+                  <div className="text-sm text-nomad-muted mt-2">
+                    Já tem conta? <Link to="/login" className="text-[#C05746] font-bold underline">Faça login</Link> para vincular a compra.
+                  </div>
+                </div>
+              ) : (
+                <Link to="/dashboard" className="btn-primary mt-8 inline-flex" data-testid="go-dashboard">
+                  Ir para o dashboard <ArrowRight size={18} />
+                </Link>
+              )}
             </>
           )}
           {status === "pending" && (

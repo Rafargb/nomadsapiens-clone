@@ -4,30 +4,61 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { registerTransaction } from "../lib/transactionStore";
 import { enrollUser } from "../lib/enrollmentStore";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || "pk_test_51MockPublicKeyChangeMe123456");
 export default function CheckoutModal({ course, onClose, user }) {
+  const [clientSecret, setClientSecret] = useState("");
+
+  React.useEffect(() => {
+    if (!course) return;
+    fetch("http://127.0.0.1:3001/api/create-payment-intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId: course.id, price: course.formattedPrice || course.price }),
+    })
+      .then((res) => res.json())
+      .then((data) => setClientSecret(data.clientSecret));
+  }, [course]);
+
   if (!course) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-      <div className="min-h-full flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
         {/* Backdrop Area to close */}
-        <div className="absolute inset-0 cursor-pointer" onClick={onClose}></div>
+        <div className="fixed inset-0 cursor-pointer" onClick={onClose}></div>
         
         {/* Main Checkout Form Wrapper */}
-        <CheckoutForm course={course} user={user} onClose={onClose} />
-      </div>
+        <div className="flex min-h-full items-center justify-center p-4 py-12 sm:p-8 sm:py-20 pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-md flex justify-center">
+            {clientSecret ? (
+              <Elements options={{ clientSecret }} stripe={stripePromise}>
+                <CheckoutForm course={course} user={user} onClose={onClose} clientSecret={clientSecret} />
+              </Elements>
+            ) : (
+              <div className="relative bg-white rounded-3xl w-full p-6 flex flex-col z-10 items-center justify-center min-h-[300px]">
+                 <Loader2 className="animate-spin text-[#00B4A0]" size={40} />
+                 <p className="mt-4 text-[#5D6068] font-bold">Iniciando Checkout Seguro...</p>
+              </div>
+            )}
+          </div>
+        </div>
     </div>
   );
 }
 
-function CheckoutForm({ course, user, onClose }) {
+function CheckoutForm({ course, user, onClose, clientSecret }) {
+  const stripe = useStripe();
+  const elements = useElements();
   const navigate = useNavigate();
   const [paying, setPaying] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("pix"); // "pix" or "card"
   const [copied, setCopied] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
 
   // Extract Order Bumps from Course Modules (Locked modules with a price)
   const orderBumps = (course.modules || []).filter(m => m.locked && m.price > 0);
@@ -73,51 +104,91 @@ function CheckoutForm({ course, user, onClose }) {
     return appliedCoupon ? base * 0.75 : base;
   };
 
+  const finishCheckout = async (basePrice, finalPrice, discountAmount) => {
+    const purchaserId = user ? user.id : `guest_${Date.now()}`;
+
+    // Registrar transação na plataforma
+    await registerTransaction({
+      user_id: purchaserId,
+      guest_name: !user ? guestName : undefined,
+      guest_email: !user ? guestEmail : undefined,
+      course_id: course.id,
+      producer_id: course.producerId,
+      amount: finalPrice,
+      payment_method: paymentMethod === 'pix' ? 'liquid_dpix' : 'credit_card',
+      status: 'completed',
+      origin: appliedCoupon ? 'affiliate' : 'platform',
+      affiliate_id: appliedCoupon || null,
+      discount_amount: discountAmount,
+      purchased_bumps: selectedBumps
+    });
+
+    // Dar acesso ao aluno no coursePlayer se estiver logado
+    if (user) {
+      await enrollUser(user.id, course.id, selectedBumps);
+    }
+
+    // Ir para a página de sucesso
+    const mockSessionId = `ws_mock_${Date.now()}`;
+    navigate(`/checkout/success?session_id=${mockSessionId}&course_id=${course.id}${!user ? `&guest_email=${encodeURIComponent(guestEmail)}&guest_name=${encodeURIComponent(guestName)}` : ''}`);
+  };
+
   const handlePayment = async (e) => {
     e.preventDefault();
-    if (!user) {
-      navigate(`/login?redirect=/courses/${course.id}`);
+    if (!user && (!guestName || !guestEmail)) {
+      toast.error("Por favor, preencha nome e e-mail para receber o acesso.");
       return;
     }
 
     setPaying(true);
 
-    // Simulando delay de blockchain ou operadora de cartão
-    setTimeout(async () => {
-      try {
-        const basePrice = getNumericPrice();
-        const finalPrice = getFinalPrice();
-        const discountAmount = basePrice - finalPrice;
+    const basePrice = getNumericPrice();
+    const finalPrice = getFinalPrice();
+    const discountAmount = basePrice - finalPrice;
 
-        // Registrar transação na plataforma
-        await registerTransaction({
-          user_id: user.id,
-          course_id: course.id,
-          producer_id: course.producerId,
-          amount: finalPrice,
-          payment_method: paymentMethod === 'pix' ? 'liquid_dpix' : 'credit_card',
-          status: 'completed',
-          origin: appliedCoupon ? 'affiliate' : 'platform',
-          affiliate_id: appliedCoupon || null,
-          discount_amount: discountAmount,
-          purchased_bumps: selectedBumps
+    if (paymentMethod === 'card') {
+      if (!stripe || !elements) {
+        setPaying(false);
+        return;
+      }
+      
+      try {
+        const { error, paymentIntent } = await stripe.confirmPayment({
+          elements,
+          redirect: 'if_required',
         });
 
-        // Dar acesso ao aluno no coursePlayer
-        await enrollUser(user.id, course.id, selectedBumps);
-
-        // Ir para a página de sucesso
-        const mockSessionId = `ws_mock_${Date.now()}`;
-        navigate(`/checkout/success?session_id=${mockSessionId}&course_id=${course.id}`);
+        if (error) {
+          toast.error(error.message || "Erro no pagamento com cartão.");
+          setPaying(false);
+          return;
+        }
+        
+        if (paymentIntent && paymentIntent.status === 'succeeded') {
+          await finishCheckout(basePrice, finalPrice, discountAmount);
+        }
       } catch (err) {
-        toast.error("Erro ao processar pagamento.");
+        toast.error("Erro ao processar pagamento com cartão.");
         setPaying(false);
       }
-    }, 2000);
+    } else {
+      // Pix simulation
+      setTimeout(async () => {
+        try {
+          await finishCheckout(basePrice, finalPrice, discountAmount);
+        } catch (err) {
+          toast.error("Erro ao processar Pix.");
+          setPaying(false);
+        }
+      }, 2000);
+    }
   };
   
   return (
-    <div className="relative bg-white rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl flex flex-col z-10 my-4 sm:my-8 max-h-[95vh] overflow-y-auto">
+    <div 
+      className="relative bg-white rounded-3xl sm:rounded-2xl w-full p-5 sm:p-6 shadow-2xl flex flex-col z-10 animate-fade-in-up"
+      style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}
+    >
       
       {/* Header with Rectangular Banner */}
       <div className="flex flex-col items-center mb-4">
@@ -137,6 +208,26 @@ function CheckoutForm({ course, user, onClose }) {
 
       {/* Access Summary (Main Offer) */}
       <div className="mb-4">
+        {!user && (
+          <div className="mb-5 space-y-3">
+            <h3 className="text-[14px] sm:text-[15px] font-bold text-[#202124] mb-1">Seus Dados</h3>
+            <input 
+              type="text" 
+              placeholder="Nome completo" 
+              value={guestName}
+              onChange={e => setGuestName(e.target.value)}
+              className="w-full bg-[#F6F6F8]/80 border border-[#E4E4E6] rounded-xl px-4 py-3.5 text-base outline-none focus:border-[#202124] focus:ring-1 focus:ring-[#202124] transition-all"
+            />
+            <input 
+              type="email" 
+              placeholder="E-mail principal" 
+              value={guestEmail}
+              onChange={e => setGuestEmail(e.target.value)}
+              className="w-full bg-[#F6F6F8]/80 border border-[#E4E4E6] rounded-xl px-4 py-3.5 text-base outline-none focus:border-[#202124] focus:ring-1 focus:ring-[#202124] transition-all"
+            />
+          </div>
+        )}
+
         <h3 className="text-[14px] sm:text-[15px] font-bold text-[#202124] mb-3">Sua Compra</h3>
         <div className="border border-[#E4E4E6] rounded-xl p-4 bg-[#F8FAFF] shadow-sm flex items-center justify-between">
            <div>
@@ -254,24 +345,12 @@ function CheckoutForm({ course, user, onClose }) {
             </div>
           ) : (
             <div className="border border-[#E4E4E6] rounded-xl p-5 bg-blue-50/50 flex flex-col justify-center space-y-4 animate-fade-in h-full">
-               <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#5D6068] block mb-1">Número do Cartão (Simulação)</label>
-                  <input type="text" placeholder="0000 0000 0000 0000" className="w-full bg-white border border-[#E4E4E6] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#2E6EF5]" />
+               <div className="w-full bg-white p-2 rounded-lg border border-[#E4E4E6]">
+                 <PaymentElement options={{ layout: "tabs" }} />
                </div>
-               <div className="flex gap-3">
-                  <div className="flex-1">
-                     <label className="text-[10px] font-bold uppercase tracking-widest text-[#5D6068] block mb-1">Validade</label>
-                     <input type="text" placeholder="MM/AA" className="w-full bg-white border border-[#E4E4E6] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#2E6EF5]" />
-                  </div>
-                  <div className="flex-1">
-                     <label className="text-[10px] font-bold uppercase tracking-widest text-[#5D6068] block mb-1">CVV</label>
-                     <input type="text" placeholder="123" className="w-full bg-white border border-[#E4E4E6] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#2E6EF5]" />
-                  </div>
-               </div>
-               <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#5D6068] block mb-1">Nome no Cartão</label>
-                  <input type="text" placeholder="Seu Nome Completo" className="w-full bg-white border border-[#E4E4E6] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#2E6EF5]" />
-               </div>
+               <p className="text-[10px] text-center text-[#5D6068] mt-2 flex items-center justify-center gap-1 font-bold">
+                  💳 Pagamento 100% Seguro e Criptografado
+               </p>
             </div>
           )}
         </div>

@@ -63,8 +63,6 @@ export default function Courses() {
     });
   }, [activeIndex, language]);
 
-  const ptCourses = courses.filter(c => c.courseLanguage === 'pt' || c.courseLanguage === 'both');
-  const enCourses = courses.filter(c => c.courseLanguage === 'en' || c.courseLanguage === 'both');
 
   return (
     <div className="bg-white min-h-screen pb-10">
@@ -90,9 +88,10 @@ export default function Courses() {
               key={cat}
               data-testid={`filter-${cat.toLowerCase()}`}
               onClick={() => setActiveIndex(idx)}
+              style={activeIndex === idx ? { backgroundColor: '#E50914' } : undefined}
               className={`px-5 py-2.5 rounded-md text-xs font-black tracking-widest uppercase transition-all shadow-sm ${
                 activeIndex === idx
-                  ? "bg-[#E50914] text-white scale-105"
+                  ? "text-white scale-105"
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900"
               }`}
             >
@@ -120,32 +119,12 @@ export default function Courses() {
             {t("courses.empty")}
           </div>
         ) : (
-          <div data-testid="courses-grid">
-            {ptCourses.length > 0 && (
-              <div className="mb-12">
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {ptCourses.map((c) => (
-                    <CourseCard key={c.id || c.course_id} c={c} t={t} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {enCourses.length > 0 && (
-              <div className="mt-16">
-                <h2 
-                  className="text-3xl font-black mb-8 text-[#111] tracking-tight"
-                  style={{ fontFamily: "'Inter', sans-serif" }}
-                >
-                  {language === 'pt' ? 'Cursos em Inglês' : 'Courses in English'}
-                </h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {enCourses.map((c) => (
-                    <CourseCard key={c.id || c.course_id} c={c} t={t} />
-                  ))}
-                </div>
-              </div>
-            )}
+          <div data-testid="courses-grid" className="mb-12">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {courses.map((c) => (
+                <CourseCard key={c.id || c.course_id} c={c} t={t} />
+              ))}
+            </div>
           </div>
         )}
       </section>

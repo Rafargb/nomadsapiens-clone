@@ -15,8 +15,8 @@ export default function Register() {
   const [params] = useSearchParams();
   const initialRole = params.get("role") || "student";
   const [form, setForm] = useState({
-    name: "",
-    email: "",
+    name: params.get("name") || "",
+    email: params.get("email") || "",
     password: "",
     role: ["student", "affiliate", "producer"].includes(initialRole) ? initialRole : "student",
   });
@@ -48,11 +48,11 @@ export default function Register() {
   return (
     <div className="h-screen bg-white flex text-[#161111] overflow-hidden relative border-t-[8px] border-[#00D4C5]">
       {/* Background Cyan Squiggles */}
-      <svg className="absolute top-0 left-1/4 w-96 h-96 text-[#a5f3fc]/60 -translate-y-1/2 pointer-events-none" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 20 180 Q 80 180 80 120 Q 80 60 140 60 T 260 60" stroke="currentColor" strokeWidth="18" strokeLinecap="round" />
+      <svg className="absolute top-0 left-1/4 w-96 h-96 -translate-y-1/2 pointer-events-none" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20 180 Q 80 180 80 120 Q 80 60 140 60 T 260 60" stroke="#a5f3fc" opacity="0.6" strokeWidth="18" strokeLinecap="round" />
       </svg>
-      <svg className="absolute bottom-0 left-0 w-[500px] h-[300px] text-[#a5f3fc]/60 translate-y-1/4 -translate-x-1/4 pointer-events-none" viewBox="0 0 400 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 0 100 Q 50 180 100 100 T 200 100 T 300 100 T 400 100" stroke="currentColor" strokeWidth="18" strokeLinecap="round" />
+      <svg className="absolute bottom-0 left-0 w-[500px] h-[300px] translate-y-1/4 -translate-x-1/4 pointer-events-none" viewBox="0 0 400 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 0 100 Q 50 180 100 100 T 200 100 T 300 100 T 400 100" stroke="#a5f3fc" opacity="0.6" strokeWidth="18" strokeLinecap="round" />
       </svg>
 
       {/* Left Side: Form */}
